@@ -1,0 +1,36 @@
+name: Three-party MP-SPDZ smoke test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/profile_p1.mpc'
+      - 'src/profile_p1_reference.py'
+      - 'src/prepare_profile_p1.py'
+      - 'src/check_profile_p1.py'
+      - 'scripts/run_profile_p1.sh'
+      - 'data/party*'
+jobs:
+  actual-multiparty-computation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y automake build-essential clang cmake git libboost-dev libboost-filesystem-dev libboost-iostreams-dev libboost-thread-dev libgmp-dev libntl-dev libsodium-dev libssl-dev libtool python3
+      - name: Build MP-SPDZ Semi2k backend from upstream
+        run: |
+          git clone --recurse-submodules --depth 1 https://github.com/data61/MP-SPDZ.git "$RUNNER_TEMP/MP-SPDZ"
+          cd "$RUNNER_TEMP/MP-SPDZ"
+          make setup
+          make -j2 semi2k-party.x
+      - name: Run three parties and compare to reference
+        run: bash scripts/run_profile_p1.sh "$RUNNER_TEMP/MP-SPDZ" 10
+      - name: Archive execution transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-mpc-transcript
+          path: profile_p1_execution.log
+          if-no-files-found: ignore
