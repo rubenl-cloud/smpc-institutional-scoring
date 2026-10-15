@@ -1,0 +1,23 @@
+name: Web demo quality checks
+on:
+  push:
+    paths:
+      - 'web/**'
+      - 'tests/test_web_server.py'
+      - 'src/profile_p1_reference.py'
+      - '.github/workflows/web-checks.yml'
+  workflow_dispatch:
+jobs:
+  frontend-and-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax
+        run: python -m compileall -q web src
+      - name: JavaScript syntax
+        run: node --check web/app.js
+      - name: API and reference unit tests
+        run: python -m unittest discover -s tests -v
