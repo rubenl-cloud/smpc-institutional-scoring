@@ -9,6 +9,7 @@ on:
       - 'src/check_profile_p1.py'
       - 'scripts/run_profile_p1.sh'
       - 'data/party*'
+      - '.github/workflows/three-party-smpc.yml'
 jobs:
   actual-multiparty-computation:
     runs-on: ubuntu-24.04
