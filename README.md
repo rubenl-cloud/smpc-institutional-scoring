@@ -12,9 +12,9 @@ Only the **boolean flag** is revealed. Neither institution should receive the ot
 
 The repository uses the **MP-SPDZ** compiler (Python-like `.mpc` programs), Python 3 standard library for preparing data and testing, and **Semi2k** for initial two-party, semi-honest experiments. Household alignment is assumed in v0; PSI/private record linkage and real institutional deployment are out of scope.
 
-## Quick start (Linux / WSL)
+## Demo to show immediately (no installation needed)\n\nFrom the repository root run:\n\n```sh\npython3 scripts/quick_demo.py --threshold 10\npython3 -m unittest discover -s tests -v\n```\n\nThis fast showcase is an **unencrypted, plaintext baseline**, **not an SMPC execution**. It prints the synthetic inputs and flags for four sample households; its purpose is to validate the rule and explain the future private-input flow. The real SMPC circuit is in `src/energy_burden.mpc` and requires MP-SPDZ installed and built, as below.\n\n## Run real two-party MPC (Linux / WSL)
 
-1. Install MP-SPDZ following the [official installation instructions](https://mp-spdz.readthedocs.io/en/latest/readme.html). Prefer release `v0.4.3`; install its build prerequisites. MP-SPDZ is not vendored into this repository.
+1. Install MP-SPDZ following the [official installation instructions](https://mp-spdz.readthedocs.io/en/latest/readme.html). Use a documented upstream release and install its build prerequisites. MP-SPDZ is not vendored into this repository.
 2. From this repository, run `bash scripts/run_demo.sh /absolute/path/to/MP-SPDZ 10`. This generates synthetic inputs for both parties, compiles the `.mpc` program, runs the Semi2k protocol locally, and checks the observed flags against the plain-text reference.
 3. Run unit tests with `python3 -m unittest discover -s tests -v`; the unit tests do **not** require MP-SPDZ.
 
