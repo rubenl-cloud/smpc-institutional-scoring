@@ -7,3 +7,4 @@ mp-spdz-run.log
 expected_energy_burden.txt
 *.secret
 *.key
+profile_p1_execution.log
