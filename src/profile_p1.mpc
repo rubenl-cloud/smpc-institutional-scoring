@@ -1,20 +1,19 @@
-# Educational 3-party example: experimental P1 activation rule (not approved).
-# Party 0 DS8: annual equivalent income (EUR cents).
-# Party 1 DS4: annual electricity expenditure (EUR cents), payment incident (0/1).
-# Party 2 DS14: annual non-electric energy expenditure (EUR cents).
-# Shared household order and public row count. No PSI in this experiment.
-# Only tier 0/1/2 is revealed, not inputs or intermediate indicators.
+# Educational three-party P1 score. Experimental, not an approved decision rule.
 N = 7
 MEDIAN_ANNUAL_CENTS = 1800000
 POVERTY_PERCENT = 60
 BURDEN_PERCENT = 10
+WEIGHT_I2 = 45
+WEIGHT_I3 = 40
+WEIGHT_I4 = 15
 for i in range(N):
     income = sint.get_input_from(0)
     electricity = sint.get_input_from(1)
     arrears = sint.get_input_from(1)
     non_electricity = sint.get_input_from(2)
-    low_income = 100 * income < POVERTY_PERCENT * MEDIAN_ANNUAL_CENTS
-    high_burden = 100 * (electricity + non_electricity) > BURDEN_PERCENT * income
-    activated = low_income * high_burden
-    tier = activated * (1 + arrears)
-    print_ln('P1_TIER %s', tier.reveal())
+    i2 = 100 * income < POVERTY_PERCENT * MEDIAN_ANNUAL_CENTS
+    i3 = 100 * (electricity + non_electricity) > BURDEN_PERCENT * income
+    i4 = arrears
+    active = i3
+    score = active * (WEIGHT_I2 * i2 + WEIGHT_I3 * i3 + WEIGHT_I4 * i4)
+    print_ln('P1_ACTIVE %s P1_SCORE %s', active.reveal(), score.reveal())

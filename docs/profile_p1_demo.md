@@ -1,73 +1,70 @@
-# Three-stakeholder P1 activation: demonstration for the 16 October meeting
+# Three-stakeholder Profile 1 activation and weighted score
 
-## Why this experiment (derived from project documents)
+## Purpose
 
-The 8 October PhD follow-up minutes request a multiparty experiment over two data sources, then integration into the Social Data Space. The 16 September notes emphasise first defining **indicator logic, equations and typed columns**, *then* requesting data from Messina, with DS8 (validated household survey) as a practical fallback. They record that using ISEE/DS1 is blocked.
+The project definition associates Profile 1 with structural economic vulnerability and the indicators I2 (relative poverty), I3 (household energy burden) and I4 (payment interruption/non-payment). This demonstration turns those concepts into a small, auditable experiment. It does not claim that the resulting rule has been approved by SOCIAREM partners.
 
-The SOCIAREM vulnerability profile specification describes **P1: structural economic vulnerability** in terms of income (I1), relative poverty (I2), household energy burden (I3), and complementary evidence including payment interruptions/nonpayment (I4). Those sources define the relevant variables, but **do not approve the exact joint P1 activation logic below**.
+## Private synthetic inputs
 
-## Demonstration inputs — THREE private stakeholders
+| Party | Simulated stakeholder | Private fields |
+|---|---|---|
+| P0 / DS8 | social organisation | annual equivalent income |
+| P1 / DS4 | electricity retailer | annual electricity cost; payment incident 0/1 |
+| P2 / DS14 | gas/fuel provider | annual non-electric energy cost |
 
-| Party | Data source | Stakeholder simulated | Columns kept private | Indicators |
-|---|---|---|---|---|
-| P0 | DS8 | Fondazione Messina / competent social entity with audited self-declaration | `annual_equiv_income_cents` | I1/I2; required for I3 |
-| P1 | DS4 | Electricity retailer | `annual_electricity_cost_cents`, `payment_incident` (0/1) | Part of I3, I4 |
-| P2 | DS14 | Gas/fuel supplier | `annual_non_electric_cost_cents` | Part of I3 |
+All amounts use integer euro cents inside Python and MP-SPDZ. Household identifiers and row order are assumed to be already aligned and are not secret inputs. PSI is not implemented.
 
-Household identifiers and row ordering are treated as **already aligned and public** (7 invented households). They are used for local synthetic validation; identifiers are **not part of the MPC secret input**. Real record linkage via PSI is not implemented.
+## Exact experimental rule
 
-Note the difference between energy expenditure **EUR cents** and energy consumption **kWh**: this prototype computes a financial burden, not kWh consumption.
+Public defaults:
 
-## Exact experimental rules
+- median annual equivalent income: EUR 18,000;
+- relative-poverty threshold: 60% of the median;
+- high energy-burden threshold: strictly more than 10% of income;
+- weights: I2 = 45, I3 = 40, I4 = 15.
 
-Public policy parameters, for demonstration **only**:
-- national median annual equivalent income: EUR 18,000 (synthetic illustrative benchmark);
-- poverty rule: equivalent income strictly below 60% of that median, hence less than EUR 10,800;
-- burden rule: combined annual electricity + non-electric energy expenditure strictly greater than 10% of annual equivalent income (illustrative threshold).
-
-The rule is:
 ```text
-I2 = (100 * income_cents < 60 * 1_800_000)
-I3_high = (100 * (electricity_cents + fuel_cents) > 10 * income_cents)
-P1_activated = I2 AND I3_high
-P1_priority_tier = 0 if not activated
-                   1 if activated AND no payment incident
-                   2 if activated AND payment incident (I4)
+I2 = 100 × income < 60 × median
+I3 = 100 × (electricity + other energy) > 10 × income
+I4 = payment incident, encoded as 0 or 1
+
+P1_active = I3
+P1_score  = P1_active × (45×I2 + 40×I3 + 15×I4)
 ```
 
-The financial burden I3 is computed jointly over three sources; the P1 activation uses I2 and I3, while I4 reinforces prioritisation. `payment_incident` is a binary simplification of I4, which in the taxonomy has richer event-count semantics. **The P1 rule and thresholds require validation by project partners before any operational use.**
+I3 is the activation condition requested for the experiment. I2 has the largest weight because it represents the structural economic component. I3 contributes 40 points and is always one when the profile is active. I4 contributes 15 points as a reinforcement of urgency. If I3 does not cross the strict threshold, the score is zero.
 
-The only values revealed by MP-SPDZ are the seven public tiers, not incomes, bills, gas expenses, individual poverty test or individual burden test. A tier-2 output itself can reveal something about payment incidents: SMPC does not eliminate leakage implied by an output.
+For H001..H007 with the repository fixtures, the expected scores are:
 
-## Immediate preview (plaintext, already unit-tested)
-
-```bash
-python3 scripts/show_profile_p1.py
-python3 -m unittest discover -s tests -v
-```
-
-Expected tiers for H001..H007:
 ```text
-2 0 0 1 0 2 0
+100 40 0 85 0 100 55
 ```
-Three households activate P1. Two of them are assigned reinforced tier 2.
 
-The preview is **not secure computation**: it merges synthetic records as a plaintext regression oracle. This is suitable for explaining the calculation but not claiming an SMPC deployment.
+Five of the seven invented households activate the profile.
 
-## Actual 3-party MP-SPDZ experiment (Linux/WSL)
+## What each execution proves
 
-1. Install/build [MP-SPDZ](https://github.com/data61/MP-SPDZ) using its official guide. Compile `semi2k-party.x`; note MP-SPDZ itself is not vendored here.
-2. From THIS repository, run `bash scripts/run_profile_p1.sh /absolute/path/to/MP-SPDZ 10`.
-3. The runner checks the output of all three protocol parties against the plaintext reference and prints PASS only if they match.
+`python scripts/show_profile_p1.py` uses the plaintext oracle. It can display I2, I3 and I4 because it intentionally sees all invented values. It proves only that the formula behaves as specified.
 
-The runner uses 3 *local processes* for P0, P1, P2. A real deployment needs three separate machines/trust domains, individual private file management, authenticated communication, governance enforcement and record alignment. The selected Semi2k protocol assumes **semi-honest** behaviour, not malicious protection.
+`bash scripts/run_profile_p1.sh /path/to/MP-SPDZ` generates separate temporary input files, compiles the secure program and runs three local Semi2k processes. The MPC program opens only:
 
-The optional GitHub Actions workflow `Three-party MP-SPDZ smoke test` attempts to build MP-SPDZ and execute that run on a Linux host. Check its actual status before reporting a cryptographic demonstration as successful; Python baseline passing is insufficient.
+```text
+P1_ACTIVE <0-or-1> P1_SCORE <0-to-100>
+```
 
-## How to present this to Jon and Mikel (2 minutes)
+The runner compares those outputs with the plaintext oracle and prints `PASS` only on exact equality. The temporary data and generated source are removed at exit.
 
-1. Show source-to-stakeholder mappings for DS8 / DS4 / DS14 and typed fields.
-2. Explain each household has a different set of private attributes; the P1 rule cannot be evaluated by one institution from its own inputs alone.
-3. Explain that the MPC circuit computes I2 and I3, activates P1, and reinforces priority with I4, revealing only a three-value tier.
-4. Show the local preview and its regression tests. If the MP-SPDZ run has passed, **also** show the actual 3-party execution with its run log.
-5. State candidly that thresholds, record linkage, trust model, and governance integration must be decided before applying this to the Messina pilot.
+The output score can reveal combinations of the binary indicators. This is intentional for the demonstration and must be analysed before a real release policy is chosen.
+
+## Honest limitations to state in a meeting
+
+- All records are synthetic.
+- The web server is a shared local test harness and can see the edited inputs.
+- The three parties are local processes, not isolated institutions.
+- Semi2k is being evaluated under a semi-honest model.
+- PSI/private record linkage, independent data ingestion, governance and Eclipse EDC integration are pending.
+- The thresholds and weights require domain and partner validation.
+
+## Suggested one-minute explanation
+
+“Three institutions own different attributes of the same synthetic household. I3 activates Profile 1 when combined energy expenditure exceeds 10% of income. Once active, a linear model assigns 45 points for relative poverty, 40 for high energy burden and 15 for a payment incident. Python gives us an understandable reference. MP-SPDZ evaluates the same comparisons and equation on secret-shared inputs and opens only the activation bit and final score. In this prototype the parties are three processes on one computer, so it demonstrates the cryptographic calculation but not yet a real institutional deployment.”

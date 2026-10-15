@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""Immediate synthetic plaintext preview. THIS IS NOT A SECURE MPC RUN."""
+"""Immediate plaintext preview. This is not an SMPC execution."""
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
-from profile_p1_reference import (load_parties, expected_tiers, MEDIAN_ANNUAL_CENTS,
-                                  POVERTY_PERCENT, BURDEN_PERCENT)
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from profile_p1_reference import (BURDEN_PERCENT, MEDIAN_ANNUAL_CENTS,
+                                  POVERTY_PERCENT, expected_results, load_parties)
 
 rows = load_parties()
-tiers = expected_tiers(rows)
-print('\n=== SOCIAREM-inspired P1 | THREE INSTITUTIONAL DATA SOURCES ===')
-print('DS8 Foundation: household annual equivalent income [P0]')
-print('DS4 Energy retailer: annual electricity bill + arrears [P1]')
-print('DS14 Fuel provider: annual non-electric expenditure [P2]')
-print(f'Public benchmark: median €{MEDIAN_ANNUAL_CENTS/100:,.0f}; poverty line {POVERTY_PERCENT}%')
-print(f'Burden threshold {BURDEN_PERCENT}% (EXPERIMENTAL / NOT VALIDATED)')
-print('Experimental activation: below poverty line AND above burden threshold')
-print('P1 tier: 0=inactive, 1=active, 2=active with electricity arrears\n')
-print('RESULTS — synthetic households (plaintext oracle; NOT an SMPC execution)')
-for (household, *_), tier in zip(rows, tiers):
-    print(f'  {household}: P1_TIER {tier}')
-print(f'\nActivated: {sum(v > 0 for v in tiers)}/{len(tiers)}; priority tier 2: {sum(v == 2 for v in tiers)}')
-print('\nTo compute SAME output with private inputs, run scripts/run_profile_p1.sh on MP-SPDZ.')
+results = expected_results(rows)
+print("\n=== P1 VULNERABILITY PROFILE | PLAINTEXT REFERENCE ===")
+print("P0 social organisation: annual equivalent income")
+print("P1 electricity retailer: annual bill and payment incident")
+print("P2 gas/fuel provider: annual non-electric energy expenditure")
+print(f"Activation: I3 energy burden > {BURDEN_PERCENT}%")
+print("Score: 45×I2 + 40×I3 + 15×I4 (zero when profile is inactive)")
+print(f"I2 threshold: income < {POVERTY_PERCENT}% of synthetic median €{MEDIAN_ANNUAL_CENTS / 100:,.0f}")
+print("Weights and thresholds are experimental, not SOCIAREM-approved.\n")
+print("RESULTS — invented households; plaintext oracle; NOT SMPC")
+for (household, *_), result in zip(rows, results):
+    print(f"  {household}: active={result.active} score={result.score:3d}/100 "
+          f"[I2={result.i2_relative_poverty}, I3={result.i3_high_energy_burden}, "
+          f"I4={result.i4_payment_incident}]")
+print(f"\nActivated: {sum(result.active for result in results)}/{len(results)}")
+print("For actual cryptographic execution, use scripts/run_profile_p1.sh in WSL/Linux.")

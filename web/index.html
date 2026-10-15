@@ -1,152 +1,106 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>Distributed Scoring Lab | SMPC Research Demo</title>
+  <title>Demostración P1 con MP-SPDZ</title>
   <link rel="stylesheet" href="/styles.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="SMPC Lab Home">
-        <span class="brandmark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>Distributed<span class="brand-bold">Scoring</span><small>RESEARCH LAB</small></span>
-      </a>
-      <nav class="head-tools" aria-label="Research links">
-        <span class="small-tag">PROTOTYPE 01 / P1</span>
-        <a href="https://github.com/rubenl-cloud/smpc-institutional-scoring" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>
-        <a class="ci-link" id="ci-link" href="https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/runs/38789469450" target="_blank" rel="noopener noreferrer"><span class="status-dot"></span> 3-party CI verified <span aria-hidden="true">↗</span></a>
-      </nav>
+  <main class="page">
+    <header>
+      <p class="kicker">DEMOSTRACIÓN CON DATOS SINTÉTICOS</p>
+      <h1>Perfil 1 de vulnerabilidad</h1>
+      <p class="intro">Edita los valores de las tres instituciones y calcula si el perfil se activa y qué puntuación obtiene.</p>
     </header>
 
-    <main>
-      <div class="hero">
-        <div>
-          <p class="eyebrow">SOCIAREM-INSPIRED · SECURE MULTI-PARTY COMPUTATION</p>
-          <h1>One decision.<br><em>Three data owners.</em><br>Zero raw data sharing.</h1>
-          <p class="subtitle">An interactive research demonstration of how institutional data contributes to a household vulnerability profile without requiring a shared central database.</p>
-        </div>
-        <div class="hero-meta" aria-label="Experiment summary">
-          <div><b>03</b><span>Independent data owners</span></div>
-          <div><b>07</b><span>Synthetic households</span></div>
-          <div><b>P1</b><span>Structural economic vulnerability</span></div>
-        </div>
-      </div>
+    <section class="notice">
+      <strong>Prueba de investigación.</strong> No introduzcas datos personales. La regla y los pesos son experimentales y no han sido aprobados por SOCIAREM.
+    </section>
 
-      <div class="caution"><span class="caution-star">✳</span> <b>Research demonstration · Synthetic inputs only.</b> The exact P1 activation logic and policy thresholds below are illustrative, not approved SOCIAREM eligibility rules. Row identities are pre-aligned; PSI and Eclipse EDC are future work.</div>
+    <section class="toolbar card">
+      <label for="household">Ejemplo sintético</label>
+      <select id="household"></select>
+      <span>Al elegir otro hogar se rellenan los campos; después puedes modificarlos.</span>
+    </section>
 
-      <div class="content-grid">
-        <div class="main-column">
-          <section class="panel" id="workflow-section">
-            <div class="section-heading">
-              <div><p class="eyebrow">01 / MULTI-PARTY WORKFLOW</p><h2>From distributed attributes to one profile</h2></div>
-              <div class="live-indicator" id="flow-indicator"><span></span> Ready to compute</div>
-            </div>
+    <form id="score-form">
+      <section class="providers" aria-label="Datos privados de las instituciones">
+        <article class="card provider">
+          <div class="party">P0 · DS8</div>
+          <h2>Entidad social</h2>
+          <p>Dato que aportaría la organización social.</p>
+          <label for="income">Ingresos equivalentes anuales (€)</label>
+          <input id="income" name="income_eur" type="number" min="1" step="1" required>
+        </article>
 
-            <div class="flow-space" id="flow-space">
-              <div class="providers" id="providers">
-                <article class="provider provider-mint" data-party="0">
-                  <div class="provider-top"><span class="provider-icon">♧</span><span class="party-id">PARTY 00 · DS8</span></div>
-                  <h3>Social organisation</h3>
-                  <p>Household income</p>
-                  <div class="field-list">
-                    <div><span>Annual equivalent income</span><strong id="value-income">•••••</strong></div>
-                  </div>
-                  <span class="private-label">◈ Private to P0</span>
-                </article>
-                <article class="provider provider-blue" data-party="1">
-                  <div class="provider-top"><span class="provider-icon">ϟ</span><span class="party-id">PARTY 01 · DS4</span></div>
-                  <h3>Electricity retailer</h3>
-                  <p>Invoices and unpaid bills</p>
-                  <div class="field-list">
-                    <div><span>Electricity expenditure</span><strong id="value-electricity">•••••</strong></div>
-                    <div><span>Payment incident</span><strong id="value-incident">•••••</strong></div>
-                  </div>
-                  <span class="private-label">◈ Private to P1</span>
-                </article>
-                <article class="provider provider-orange" data-party="2">
-                  <div class="provider-top"><span class="provider-icon">◈</span><span class="party-id">PARTY 02 · DS14</span></div>
-                  <h3>Fuel provider</h3>
-                  <p>Non-electric energy costs</p>
-                  <div class="field-list">
-                    <div><span>Annual fuel expenditure</span><strong id="value-fuel">•••••</strong></div>
-                  </div>
-                  <span class="private-label">◈ Private to P2</span>
-                </article>
-              </div>
+        <article class="card provider">
+          <div class="party">P1 · DS4</div>
+          <h2>Comercializadora eléctrica</h2>
+          <p>Gasto eléctrico e indicador simplificado de impago.</p>
+          <label for="electricity">Gasto eléctrico anual (€)</label>
+          <input id="electricity" name="electricity_eur" type="number" min="0" step="1" required>
+          <label for="incident">Impago: 0 = no, 1 = sí</label>
+          <input id="incident" name="payment_incident" type="number" min="0" max="1" step="1" required>
+        </article>
 
-              <div class="flow-lines" aria-hidden="true">
-                <div class="vertical-connector"><span></span></div>
-                <div class="flow-trunks"><i></i><i></i><i></i></div>
-                <div class="label-on-wire" id="wire-label">Private values stay with their owners</div>
-              </div>
-
-              <div class="secure-engine" id="secure-engine">
-                <div class="engine-orbit orbit-a"></div><div class="engine-orbit orbit-b"></div>
-                <div class="engine-content">
-                  <span class="engine-chip">SECURE COMPUTATION LAYER</span>
-                  <div class="engine-symbol">⟡</div>
-                  <div><h3 id="engine-title">MP-SPDZ · Semi2k</h3><p id="engine-subtitle">3-party circuit · arithmetic &amp; comparisons</p></div>
-                  <div class="engine-operations"><span>I2 · income</span><b>+</b><span>I3 · energy burden</span><b>+</b><span>I4 · arrears</span></div>
-                </div>
-              </div>
-              <div class="result-arrow" aria-hidden="true"><span></span> ↓ <small>Minimal output disclosure</small></div>
-
-              <div class="output-card" id="output-card">
-                <div><p class="eyebrow">RELEASED RESULT</p><h3>Vulnerability profile <strong>P1</strong></h3><p id="output-subheading">Run a calculation to obtain the profile tier.</p></div>
-                <div class="tier-graphic"><strong id="selected-tier">—</strong><small id="tier-label">Not computed</small></div>
-              </div>
-            </div>
-            <div class="flow-legend">
-              <span><i class="legend-dot mint"></i> Source owner</span>
-              <span><i class="legend-dot violet"></i> MPC protocol / secure messages</span>
-              <span><i class="legend-dot pink"></i> Permitted output</span>
-              <button id="reveal-toggle" class="link-button" type="button" aria-pressed="false">Show synthetic inputs ↗</button>
-            </div>
-          </section>
-        </div>
-
-        <aside class="side-column">
-          <section class="panel control-panel">
-            <p class="eyebrow">02 / CONFIGURE SCENARIO</p>
-            <h2>Select a household</h2>
-            <div class="household-list" id="households" role="group" aria-label="Synthetic households"></div>
-            <div class="divider"></div>
-            <div class="settings-top"><h3>Public policy parameters</h3><span class="experimental-pill">EXPERIMENTAL</span></div>
-            <div class="setting"><label for="poverty">Poverty line <output id="poverty-output">60%</output></label><input id="poverty" type="range" min="40" max="80" value="60" step="1"></div>
-            <div class="setting"><label for="burden">Energy burden <output id="burden-output">10%</output></label><input id="burden" type="range" min="5" max="25" value="10" step="1"></div>
-            <div class="setting"><label for="median">National median annual income <output id="median-output">€18,000</output></label><input id="median" type="range" min="12000" max="30000" value="18000" step="1000"></div>
-            <div class="divider"></div>
-            <button class="primary-button" id="run-reference" type="button"><span aria-hidden="true">▶</span> Run visual reference</button>
-            <button class="secondary-button" id="run-secure" type="button"><span aria-hidden="true">⌁</span> Run actual 3-party MPC</button>
-            <p class="mode-hint" id="backend-hint" role="status">Checking backend...</p>
-          </section>
-          <section class="panel result-panel">
-            <div class="section-heading compact"><div><p class="eyebrow">03 / OUTCOME</p><h2>Profile results</h2></div><span class="small-tag" id="mode-pill">NO RUN</span></div>
-            <div class="metrics"><div><strong id="metric-active">—</strong><small>Activated / 7</small></div><div><strong id="metric-high">—</strong><small>High-priority</small></div></div>
-            <div class="result-list" id="result-list"><p class="empty-results">Run a calculation to see each household's profile.</p></div>
-            <div class="validation-status" id="validation-status">Awaiting execution</div>
-          </section>
-        </aside>
-      </div>
-
-      <section class="explainer panel">
-        <div><p class="eyebrow">04 / AUDITABLE DECISION LOGIC</p><h2>Transparent rules.<br><em>Private inputs.</em></h2><p>The P1 circuit combines income, energy expenditures and payment incidents. Intermediate comparisons remain secret in the actual MP-SPDZ protocol; only the final tier is opened.</p></div>
-        <div class="rules">
-          <div class="rule"><div class="rule-number">I2</div><div><b>Relative poverty</b><code>income &lt; poverty% × national median</code></div><span>CONDITION</span></div>
-          <div class="rule"><div class="rule-number">I3</div><div><b>Energy burden</b><code>100 × (electricity + fuel) &gt; burden% × income</code></div><span>CONDITION</span></div>
-          <div class="rule"><div class="rule-number">P1</div><div><b>Profile activation</b><code>I2 AND I3 → activated</code></div><span>OUTPUT</span></div>
-          <div class="rule"><div class="rule-number">I4</div><div><b>Payment incident</b><code>if activated: tier = 1 + incident</code></div><span>PRIORITY</span></div>
-        </div>
+        <article class="card provider">
+          <div class="party">P2 · DS14</div>
+          <h2>Proveedor de gas</h2>
+          <p>Otros gastos energéticos del mismo hogar.</p>
+          <label for="other-energy">Gasto no eléctrico anual (€)</label>
+          <input id="other-energy" name="other_energy_eur" type="number" min="0" step="1" required>
+        </article>
       </section>
 
-      <div class="footnote"><p><strong>Research boundaries:</strong> only synthetic, pre-aligned household records. This dashboard exposes source attributes in a dedicated educational preview, not during MPC execution. Real institution separation, PSI, policies and data-space integration remain open engineering steps.</p><p><a href="https://github.com/rubenl-cloud/smpc-institutional-scoring/blob/main/docs/profile_p1_demo.md" target="_blank" rel="noopener noreferrer">Read experimental specification ↗</a></p></div>
-    </main>
-  </div>
-  <div class="toast" id="toast" role="alert" aria-live="polite" hidden></div>
+      <section class="card parameters">
+        <div>
+          <h2>Parámetros públicos</h2>
+          <p>También son números editables, pero no se consideran secretos.</p>
+        </div>
+        <label for="median">Mediana anual (€)
+          <input id="median" name="median_eur" type="number" min="1000" step="100" required>
+        </label>
+        <label for="poverty">Umbral de pobreza (% de la mediana)
+          <input id="poverty" name="poverty_pct" type="number" min="0" max="100" step="1" required>
+        </label>
+        <label for="burden">Umbral de carga energética (%)
+          <input id="burden" name="burden_pct" type="number" min="0" max="100" step="1" required>
+        </label>
+      </section>
+
+      <section class="rule card">
+        <h2>Regla que se demuestra</h2>
+        <p><strong>Activación:</strong> el Perfil 1 se activa cuando I3, la carga energética, supera el umbral público.</p>
+        <code>Puntuación = 45·I2 + 40·I3 + 15·I4</code>
+        <p class="muted">Si el perfil no se activa, la puntuación es 0. I2 representa pobreza relativa; I3, carga energética alta; I4, impago.</p>
+      </section>
+
+      <div class="actions">
+        <button id="reference-button" type="submit">Calcular referencia Python</button>
+        <button id="mpc-button" class="secondary" type="button">Ejecutar MP-SPDZ real</button>
+      </div>
+      <p id="backend-status" class="backend-status" role="status">Comprobando MP-SPDZ…</p>
+    </form>
+
+    <section id="result" class="card result" aria-live="polite">
+      <div class="result-heading">
+        <div><span id="mode" class="badge">SIN CALCULAR</span><h2>Resultado</h2></div>
+        <div class="score"><strong id="score">—</strong><span>/ 100</span></div>
+      </div>
+      <p id="activation" class="activation">Introduce o modifica los números y pulsa «Calcular».</p>
+      <div class="indicators">
+        <div><span>I2 · Pobreza relativa</span><strong id="i2">—</strong></div>
+        <div><span>I3 · Carga energética</span><strong id="i3">—</strong><small id="burden-value"></small></div>
+        <div><span>I4 · Impago</span><strong id="i4">—</strong></div>
+      </div>
+      <p id="disclosure" class="disclosure"></p>
+    </section>
+
+    <footer>
+      La referencia Python ve todos los números. La ejecución MP-SPDZ usa tres procesos y archivos temporales separados, pero siguen estando en un único ordenador de demostración. No hay todavía aislamiento institucional real, PSI ni integración EDC.
+    </footer>
+  </main>
 </body>
 </html>

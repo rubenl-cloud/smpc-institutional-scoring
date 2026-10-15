@@ -1,85 +1,44 @@
-# Interactive P1 research demo — meeting guide
+# Simple editable web demonstration
 
-**Status:** web server + animated browser frontend implemented; API integration and frontend syntax checks passed in GitHub Actions. Separate 3-party MP-SPDZ integration workflow has also passed. This is a demonstrator with **invented** household records; it is not production infrastructure.
+## Start immediately on Windows
 
-## Quick demo on Windows (no setup other than Python and Git)
+From the repository root:
 
-1. Clone once (or `git pull` if already cloned):
+```powershell
+python web/server.py
+```
 
-   ```powershell
-   git clone https://github.com/rubenl-cloud/smpc-institutional-scoring.git
-   cd smpc-institutional-scoring
-   ```
-2. Run:
+Open http://127.0.0.1:8765. No package installation, npm command or database is required.
 
-   ```powershell
-   python web/server.py
-   ```
+## Meeting walkthrough
 
-3. Open **http://127.0.0.1:8765**. No external web hosting, npm, Docker, Python packages or database required for this mode.
+1. Choose one of the seven invented households.
+2. Point out the three columns: P0 income, P1 electricity and impago, P2 other energy expenditure.
+3. Change any number directly. There are no sliders and no decorative protocol animation.
+4. Explain the public 10% I3 threshold and the equation `45·I2 + 40·I3 + 15·I4`.
+5. Press **Calcular referencia Python**. The result shows activation, score and the three binary indicators. State clearly that this mode is plaintext.
+6. If MP-SPDZ is configured in WSL/Linux, press **Ejecutar MP-SPDZ real**. This mode opens only activation and score, so the indicator boxes say “no revelado”.
 
-If `python` isn't recognized, use `py -3 web/server.py`. Leave that terminal open throughout the demo. Ctrl+C to stop it.
+The two buttons are intentionally separate. Failure or absence of MP-SPDZ never triggers a hidden plaintext fallback.
 
-## Screen walkthrough (2–4 minutes)
+## Enable the cryptographic run in WSL/Linux
 
-1. Explain the stakeholder cards: DS8 = social organisation with equivalent household income; DS4 = electricity retailer with expenditure + payment incident; DS14 = non-electric fuel provider with costs.
-2. Select **H001**. Without clicking "Show synthetic inputs", attribute values are represented as private. Click **Show synthetic inputs** to disclose intentionally fabricated data *for education only*.
-3. Click **Run visual reference**. Animated lines represent the flow of the conceptual calculation, but **this mode is a server-side plaintext oracle**, not an MPC protocol. Observe `P1_TIER 2` for H001.
-4. Click H004: `P1_TIER 1`, demonstrating activation without recorded payment incident. Click H005 or H007: `P1_TIER 0`, demonstrating strict threshold boundaries.
-5. Change the burden threshold to 20%; the reference will recompute; none of the demo households activate at this higher threshold.
-6. Point to **I2 / I3 / I4**, distinguishing activation rules from the payment incident used only to reinforce severity.
-7. Click the **3-party CI verified** link for evidence of a successfully executed independent *integration test* with MP-SPDZ. If local MP-SPDZ is configured, use the **Run actual 3-party MPC** button for a live, cryptographic run.
-
-### What the colours/lines mean
-
-The UI has three visually separated synthetic **data owners**, a joint computation layer, and the disclosed **P1 tier**. In real MP-SPDZ, parties exchange secret shares and protocol messages, **not raw incomes and bills**. The browser animation is educational: it does not depict every protocol message, and is not proof that a live protocol ran.
-
-## Live 3-party cryptographic mode on Linux / WSL
-
-Install an upstream MP-SPDZ checkout **outside** this repository. A recent Ubuntu toolchain and `semi2k-party.x` are required. Our [GitHub Actions integration workflow](../.github/workflows/three-party-smpc.yml) installs the dependencies, builds and executes it in Linux, and validates the final tiers. That workflow is a useful reproducible reference for building MP-SPDZ.
-
-An outline for an Ubuntu/WSL machine:
+Build `semi2k-party.x` in an upstream MP-SPDZ checkout, then:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y automake build-essential clang cmake git libboost-dev libboost-filesystem-dev libboost-iostreams-dev libboost-thread-dev libgmp-dev libntl-dev libsodium-dev libssl-dev libtool python3
-git clone --recurse-submodules https://github.com/data61/MP-SPDZ.git ~/MP-SPDZ
-cd ~/MP-SPDZ
-make setup
-make -j2 semi2k-party.x
-cd /path/to/smpc-institutional-scoring
-export MP_SPDZ_HOME="$HOME/MP-SPDZ"
+export MP_SPDZ_HOME=/absolute/path/to/MP-SPDZ
 python3 web/server.py
 ```
 
-Now load http://127.0.0.1:8765. The second button should be enabled. It invokes the actual MP-SPDZ 3-party runner with the same public thresholds selected in the UI; the process prints one tier per household, which the backend compares with the independent Python reference. It **does not** silently run a plaintext fallback.
+The server creates three temporary owner-specific CSV files from the edited synthetic values. The runner converts them into MP-SPDZ files with prefix `<temporary>/inputs/Input`, and `semi2k-party.x` receives that location through `-IF`. Temporary files are deleted after success or failure.
 
-The Web server stays on **127.0.0.1**. It was not designed for Internet hosting. A live run uses three MPC processes on the **same machine** and a test harness that reads the three invented CSVs. This is enough to validate the protocol calculation, but not isolation of private institutional records. Hosting public internet endpoints or processing real personal records requires a separate security and architecture review.
+This improves reproducibility and avoids overwriting repository fixtures. It does not create real institutional isolation because one local server still prepares all three files.
 
-## Security and methodological boundaries
-
-- P1 means Structural Economic Vulnerability. Income I1 / relative poverty I2 and burden I3 underpin the demo; I4, represented by a simplified yes/no payment incident instead of a frequency, reinforces priority.
-- The median annual equivalent income of EUR 18,000 is **synthetic**, not a real statistical assertion. A 60% poverty threshold derives from indicator I2; the 10% energy burden trigger and the AND activation rule are **illustrative design choices** requiring expert approval.
-- All seven records are fictional; their indices are pre-aligned among participants. There is no PSI, no consent management, no formal ODRL contract negotiation, no Eclipse EDC connector, no actual energy-community eligibility decision.
-- Output tiers may themselves leak sensitive correlations (e.g. tier 2 strongly correlates with nonpayment); the protocol protects the inputs according to its *semi-honest* model, not against arbitrary inference from repeated permitted outputs.
-- The public synthetic preview, web API and Python oracle handle data in plaintext by design. **Only a successful /api/mpc invocation or the previously passing 3-party CI run can be cited as actual MP-SPDZ SMPC execution.**
-
-## Validation
+## Verification
 
 ```sh
 python -m unittest discover -s tests -v
 node --check web/app.js
 ```
 
-Node is needed only for the optional syntax validation, **not** to run the web dashboard.
-
-- Python checks: [GitHub Actions](https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/workflows/python-reference.yml)
-- Web API checks: [GitHub Actions](https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/workflows/web-checks.yml)
-- Secure 3-party SMPC integration: [GitHub Actions](https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/workflows/three-party-smpc.yml)
-
-## Next engineering steps
-
-1. Validate final indicator/profile rules with SOCIAREM domain partners.
-2. Make source-specific party startup and storage independent across distinct trust domains.
-3. Add private household record alignment (PSI) and policy-controlled output approval.
-4. Place orchestrator/credentials/agreements under EDC governance before any real pilot use.
+The Python suite checks boundaries, weights, generated owner files, transcript parsing, editable API inputs, static assets and the absence of a plaintext fallback. The real protocol requires either a local WSL/Linux run or a passing `Three-party MP-SPDZ smoke test` workflow.

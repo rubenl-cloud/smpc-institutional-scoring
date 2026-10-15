@@ -1,5 +1,6 @@
-"""End-to-end localhost dashboard/API tests; does not require MP-SPDZ."""
+"""End-to-end localhost web/API tests; MP-SPDZ is tested separately in CI."""
 from __future__ import annotations
+
 import json
 import sys
 import threading
@@ -36,52 +37,67 @@ class WebServerTests(unittest.TestCase):
         with urlopen(request, timeout=5) as response:
             return response.status, response.headers["Content-Type"], response.read()
 
-    def test_overview_lists_three_parties(self):
+    @staticmethod
+    def sample(**changes):
+        body = {"income_eur": 9000, "electricity_eur": 900,
+                "other_energy_eur": 350, "payment_incident": 1,
+                "median_eur": 18000, "poverty_pct": 60, "burden_pct": 10}
+        body.update(changes)
+        return body
+
+    def test_overview_lists_editable_examples_and_weights(self):
         status, _, body = self.url("/api/overview")
-        self.assertEqual(status, 200)
         obj = json.loads(body)
-        self.assertEqual(len(obj["parties"]), 3)
-        self.assertEqual(obj["households"], [f"H{i:03}" for i in range(1, 8)])
-        self.assertTrue(obj["synthetic"])
-
-    def test_reference_returns_expected_p1_tiers(self):
-        status, _, body = self.url("/api/reference", {
-            "median_eur": 18000, "poverty_pct": 60, "burden_pct": 10,
-        })
         self.assertEqual(status, 200)
+        self.assertEqual(len(obj["households"]), 7)
+        self.assertEqual(obj["weights"], {"i2": 45, "i3": 40, "i4": 15})
+
+    def test_reference_returns_activation_score_and_breakdown(self):
+        status, _, body = self.url("/api/reference", self.sample())
         result = json.loads(body)
+        self.assertEqual(status, 200)
         self.assertFalse(result["secure"])
-        self.assertEqual([x["tier"] for x in result["outputs"]], [2, 0, 0, 1, 0, 2, 0])
-        self.assertEqual(result["activated"], 3)
+        self.assertTrue(result["active"])
+        self.assertEqual(result["score"], 100)
+        self.assertEqual(result["indicators"], {"i2": 1, "i3": 1, "i4": 1})
 
-    def test_threshold_adjustment_changes_result(self):
-        _, _, body = self.url("/api/reference", {
-            "median_eur": 18000, "poverty_pct": 60, "burden_pct": 20,
-        })
+    def test_edited_numbers_change_result(self):
+        _, _, body = self.url("/api/reference", self.sample(
+            income_eur=15000, electricity_eur=1000,
+            other_energy_eur=0, payment_incident=0))
         result = json.loads(body)
-        self.assertEqual(result["activated"], 0)
+        self.assertFalse(result["active"])
+        self.assertEqual(result["score"], 0)
+        _, _, body = self.url("/api/reference", self.sample(
+            income_eur=15000, electricity_eur=2000,
+            other_energy_eur=0, payment_incident=0))
+        result = json.loads(body)
+        self.assertTrue(result["active"])
+        self.assertEqual(result["score"], 40)
 
-    def test_parameter_validation(self):
-        with self.assertRaises(HTTPError) as caught:
-            self.url("/api/reference", {"median_eur": "18k", "poverty_pct": 60, "burden_pct": 10})
-        self.assertEqual(caught.exception.code, 400)
+    def test_validation_rejects_non_numeric_or_invalid_incident(self):
+        for changes in ({"income_eur": "9000"}, {"payment_incident": 2}):
+            with self.assertRaises(HTTPError) as caught:
+                self.url("/api/reference", self.sample(**changes))
+            self.assertEqual(caught.exception.code, 400)
 
-    def test_static_page_serves_without_dependencies(self):
+    def test_static_page_is_simple_and_uses_number_inputs(self):
         status, content_type, page = self.url("/")
         self.assertEqual(status, 200)
         self.assertIn("text/html", content_type)
-        self.assertIn(b"Three data owners", page)
+        self.assertIn(b"Perfil 1 de vulnerabilidad", page)
+        self.assertGreaterEqual(page.count(b'type="number"'), 7)
+        self.assertNotIn(b'type="range"', page)
         for asset in ("/app.js", "/styles.css"):
             code, _, content = self.url(asset)
             self.assertEqual(code, 200)
             self.assertGreater(len(content), 1000)
 
     def test_mpc_unavailable_never_falls_back_to_plaintext(self):
-        # This test applies only where MP-SPDZ hasn't been configured.
         if server.mpc_home() is not None:
-            self.skipTest("MP-SPDZ configured; tested via integration workflow")
+            self.skipTest("MP-SPDZ configured; covered by integration workflow")
         with self.assertRaises(HTTPError) as caught:
-            self.url("/api/mpc", {"median_eur": 18000, "poverty_pct": 60, "burden_pct": 10})
+            self.url("/api/mpc", self.sample())
         self.assertEqual(caught.exception.code, 409)
 
 

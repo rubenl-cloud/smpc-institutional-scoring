@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""Local SOCIAREM-inspired SMPC showcase API, using Python standard library.
-
-No personal data; binds only to loopback. Two explicitly different operations:
-(1) plaintext synthetic reference; (2) actual local MP-SPDZ 3-party execution.
-"""
+"""Small localhost-only API for the editable synthetic P1 demonstration."""
 from __future__ import annotations
 
+import csv
 import json
 import os
-import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -19,56 +16,67 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from profile_p1_reference import (load_parties, expected_tiers, MEDIAN_ANNUAL_CENTS,
-                                  POVERTY_PERCENT, BURDEN_PERCENT)
+from check_profile_p1 import parse_results
+from profile_p1_reference import (BURDEN_PERCENT, MEDIAN_ANNUAL_CENTS,
+                                  POVERTY_PERCENT, WEIGHT_I2, WEIGHT_I3,
+                                  WEIGHT_I4, evaluate_profile, load_parties)
 
 WEB = ROOT / "web"
 RUN_LOCK = threading.Lock()
-CI_LINK = "https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/runs/38789469450"
-
-PARTIES = [
-    {"party": 0, "source": "DS8", "title": "Social organisation", "role": "Income & household survey", "symbol": "◈",
-     "fields": ["annual_equiv_income_cents"], "color": "mint"},
-    {"party": 1, "source": "DS4", "title": "Electricity retailer", "role": "Bills & payment incidents", "symbol": "ϟ",
-     "fields": ["annual_electricity_cost_cents", "payment_incident"], "color": "blue"},
-    {"party": 2, "source": "DS14", "title": "Fuel provider", "role": "Other energy expenditure", "symbol": "◉",
-     "fields": ["annual_non_electric_cost_cents"], "color": "orange"},
-]
 
 
-def parameters(data: dict) -> tuple[int, int, int]:
-    """Validate only public experiment parameters; never process client raw inputs."""
-    median_eur = data.get("median_eur", MEDIAN_ANNUAL_CENTS // 100)
-    poverty = data.get("poverty_pct", POVERTY_PERCENT)
-    burden = data.get("burden_pct", BURDEN_PERCENT)
-    if any(type(x) is not int for x in (median_eur, poverty, burden)):
-        raise ValueError("Parameters must be whole numbers")
-    if not 1000 <= median_eur <= 1_000_000 or not 0 <= poverty <= 100 or not 0 <= burden <= 100:
-        raise ValueError("Median (EUR) must be 1,000–1,000,000; thresholds 0–100%")
-    return median_eur * 100, poverty, burden
+def _whole_number(data: dict, key: str, default: int | None = None) -> int:
+    value = data.get(key, default)
+    if type(value) is not int:
+        raise ValueError(f"{key} must be a whole number")
+    return value
 
 
-def reference_result(median: int, poverty: int, burden: int) -> dict:
-    """Public synthetic demo oracle; never call it on production data."""
-    rows = load_parties()
-    tiers = expected_tiers(rows, median=median, poverty_percent=poverty,
-                           burden_percent=burden)
-    outcomes = []
-    for (household, income, electricity, fuel, incident), tier in zip(rows, tiers):
-        outcomes.append({
-            "household": household, "tier": tier, "active": tier > 0,
-            "poverty_check": 100 * income < poverty * median,
-            "burden_check": 100 * (electricity + fuel) > burden * income,
-            "annual_income_cents": income,
-            "energy_cents": electricity + fuel,
-            "energy_burden_pct": round(100 * (electricity + fuel) / income, 2),
-            "incident": incident,
-        })
-    return {"mode": "reference", "secure": False, "validated": True,
-            "parameters": {"median_eur": median // 100, "poverty_pct": poverty, "burden_pct": burden},
-            "outputs": outcomes, "activated": sum(x["active"] for x in outcomes),
-            "high_priority": sum(x["tier"] == 2 for x in outcomes),
-            "disclosure": "Plaintext reference: synthetic data combined locally; not privacy-preserving."}
+def request_values(data: dict) -> dict[str, int]:
+    values = {
+        "income_eur": _whole_number(data, "income_eur"),
+        "electricity_eur": _whole_number(data, "electricity_eur"),
+        "other_energy_eur": _whole_number(data, "other_energy_eur"),
+        "payment_incident": _whole_number(data, "payment_incident"),
+        "median_eur": _whole_number(data, "median_eur", MEDIAN_ANNUAL_CENTS // 100),
+        "poverty_pct": _whole_number(data, "poverty_pct", POVERTY_PERCENT),
+        "burden_pct": _whole_number(data, "burden_pct", BURDEN_PERCENT),
+    }
+    if not 1 <= values["income_eur"] <= 10_000_000:
+        raise ValueError("income_eur must be between 1 and 10,000,000")
+    if not 0 <= values["electricity_eur"] <= 10_000_000 or not 0 <= values["other_energy_eur"] <= 10_000_000:
+        raise ValueError("Energy expenditures must be between 0 and 10,000,000")
+    if values["payment_incident"] not in (0, 1):
+        raise ValueError("payment_incident must be 0 or 1")
+    if not 1_000 <= values["median_eur"] <= 1_000_000:
+        raise ValueError("median_eur must be between 1,000 and 1,000,000")
+    if not 0 <= values["poverty_pct"] <= 100 or not 0 <= values["burden_pct"] <= 100:
+        raise ValueError("Threshold percentages must be between 0 and 100")
+    return values
+
+
+def reference_result(values: dict[str, int]) -> dict:
+    income = values["income_eur"] * 100
+    electricity = values["electricity_eur"] * 100
+    other = values["other_energy_eur"] * 100
+    result = evaluate_profile(
+        income, electricity, other, values["payment_incident"],
+        median=values["median_eur"] * 100,
+        poverty_percent=values["poverty_pct"],
+        burden_percent=values["burden_pct"],
+    )
+    return {
+        "mode": "reference", "secure": False, "validated": True,
+        "active": bool(result.active), "score": result.score,
+        "indicators": {
+            "i2": result.i2_relative_poverty,
+            "i3": result.i3_high_energy_burden,
+            "i4": result.i4_payment_incident,
+        },
+        "energy_burden_pct": round(100 * (electricity + other) / income, 2),
+        "equation": f"{WEIGHT_I2}×I2 + {WEIGHT_I3}×I3 + {WEIGHT_I4}×I4",
+        "disclosure": "Referencia en texto claro: el servidor local ve todas las entradas inventadas. Esto no es SMPC.",
+    }
 
 
 def mpc_home() -> Path | None:
@@ -76,43 +84,61 @@ def mpc_home() -> Path | None:
     if not raw:
         return None
     root = Path(raw).expanduser().resolve()
-    if all((root / x).exists() for x in ("semi2k-party.x", "compile.py", "Scripts/semi2k.sh")):
+    if all((root / item).exists() for item in ("semi2k-party.x", "compile.py", "Scripts/semi2k.sh")):
         return root
     return None
 
 
-def real_mpc_result(median: int, poverty: int, burden: int) -> dict:
-    """Execute the real Semi2k 3-party protocol. No fallback to plaintext."""
+def _write_editable_party_files(directory: Path, values: dict[str, int]) -> None:
+    rows = [
+        ("party0_ds8_social.csv", ["household_id", "annual_equiv_income_cents"],
+         ["EDITED", values["income_eur"] * 100]),
+        ("party1_ds4_electricity.csv", ["household_id", "annual_electricity_cost_cents", "payment_incident"],
+         ["EDITED", values["electricity_eur"] * 100, values["payment_incident"]]),
+        ("party2_ds14_fuels.csv", ["household_id", "annual_non_electric_cost_cents"],
+         ["EDITED", values["other_energy_eur"] * 100]),
+    ]
+    for name, header, row in rows:
+        with (directory / name).open("w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow(header)
+            writer.writerow(row)
+
+
+def real_mpc_result(values: dict[str, int]) -> dict:
     root = mpc_home()
     if root is None:
-        raise RuntimeError("MP-SPDZ unavailable: set MP_SPDZ_HOME to a built MP-SPDZ checkout in Linux/WSL.")
+        raise RuntimeError("MP-SPDZ is unavailable. Start this server in WSL with MP_SPDZ_HOME set.")
     if not RUN_LOCK.acquire(blocking=False):
-        raise RuntimeError("An MP-SPDZ run is already in progress. Try again when it finishes.")
+        raise RuntimeError("Another MP-SPDZ run is in progress")
     try:
         started = time.perf_counter()
-        proc = subprocess.run(
-            ["bash", str(ROOT / "scripts" / "run_profile_p1.sh"),
-             str(root), str(burden), str(median), str(poverty)],
-            cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, timeout=240, check=False,
-        )
-        if proc.returncode != 0:
-            last_lines = "\n".join(proc.stdout.splitlines()[-12:])
-            raise RuntimeError(f"MP-SPDZ exited with code {proc.returncode}. Recent log:\n{last_lines[-1800:]}")
-        actual = [int(x) for x in re.findall(r"^P1_TIER\s+([012])\s*$", proc.stdout, re.MULTILINE)]
-        expected = expected_tiers(load_parties(), median=median, poverty_percent=poverty,
-                                  burden_percent=burden)
-        if actual != expected:
-            raise RuntimeError(f"Protocol outputs did not match reference: {actual} vs {expected}")
+        with tempfile.TemporaryDirectory(prefix="profile-p1-web-") as temporary:
+            data_dir = Path(temporary)
+            _write_editable_party_files(data_dir, values)
+            process = subprocess.run(
+                ["bash", str(ROOT / "scripts" / "run_profile_p1.sh"), str(root),
+                 str(values["burden_pct"]), str(values["median_eur"] * 100),
+                 str(values["poverty_pct"]), str(data_dir)],
+                cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=240, check=False,
+            )
+        if process.returncode != 0:
+            tail = "\n".join(process.stdout.splitlines()[-12:])
+            raise RuntimeError(f"MP-SPDZ exited with code {process.returncode}. Recent log:\n{tail[-1800:]}")
+        observed = parse_results(process.stdout)
+        if len(observed) != 1:
+            raise RuntimeError(f"Expected one MP-SPDZ result, received {observed}")
+        active, score = observed[0]
+        expected = reference_result(values)
+        if (bool(active), score) != (expected["active"], expected["score"]):
+            raise RuntimeError("The cryptographic output did not match the plaintext oracle")
         return {
             "mode": "mp-spdz", "secure": True, "validated": True,
-            "parameters": {"median_eur": median // 100, "poverty_pct": poverty, "burden_pct": burden},
-            "outputs": [{"household": household, "tier": value, "active": value > 0}
-                        for (household, *_), value in zip(load_parties(), actual)],
-            "activated": sum(v > 0 for v in actual),
-            "high_priority": sum(v == 2 for v in actual),
+            "active": bool(active), "score": score, "indicators": None,
+            "equation": expected["equation"],
             "duration_sec": round(time.perf_counter() - started, 3),
-            "disclosure": "Actual local 3-party Semi2k run. Only output tiers disclosed by protocol. The test harness uses shared synthetic fixtures.",
+            "disclosure": "Ejecución local real de Semi2k con tres procesos. Solo se revelaron la activación y la puntuación; los archivos temporales se eliminaron.",
         }
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("MP-SPDZ timed out after 240 seconds") from exc
@@ -121,33 +147,34 @@ def real_mpc_result(median: int, poverty: int, burden: int) -> dict:
 
 
 def overview() -> dict:
-    rows = load_parties()
+    households = []
+    for household, income, electricity, other, incident in load_parties():
+        households.append({
+            "id": household, "income_eur": income // 100,
+            "electricity_eur": electricity // 100,
+            "other_energy_eur": other // 100, "payment_incident": incident,
+        })
     return {
-        "demo": "P1 — Structural economic vulnerability",
-        "parties": PARTIES,
-        "households": [x[0] for x in rows],
-        "synthetic": True, "party_data": {
-            "0": [{"household": h, "income_cents": inc} for h, inc, _, _, _ in rows],
-            "1": [{"household": h, "electricity_cents": e, "payment_incident": p} for h, _, e, _, p in rows],
-            "2": [{"household": h, "other_energy_cents": f} for h, _, _, f, _ in rows],
-        },
-        "default_parameters": {"median_eur": MEDIAN_ANNUAL_CENTS // 100,
-                               "poverty_pct": POVERTY_PERCENT, "burden_pct": BURDEN_PERCENT},
+        "households": households,
+        "defaults": {"median_eur": MEDIAN_ANNUAL_CENTS // 100,
+                     "poverty_pct": POVERTY_PERCENT, "burden_pct": BURDEN_PERCENT},
+        "weights": {"i2": WEIGHT_I2, "i3": WEIGHT_I3, "i4": WEIGHT_I4},
         "mpc_available": mpc_home() is not None,
-        "verified_ci": {"passed": True, "url": CI_LINK,
-                        "description": "3-party Semi2k completed and verified in GitHub Actions (2026-10-15)"},
-        "notice": "All inputs are fabricated. P1 rule and numerical thresholds are illustrative and not SOCIAREM-approved. Record linkage and EDC integration are not implemented.",
+        "notice": "Only synthetic data. Experimental rule; not approved by SOCIAREM. PSI, EDC and real institutional isolation are not implemented.",
     }
 
 
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, format: str, *args) -> None:
+        return
+
     def send_bytes(self, payload: bytes, content_type: str, status: int = 200) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'")
         self.end_headers()
         self.wfile.write(payload)
 
@@ -159,38 +186,32 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/overview":
             self.send_json(overview())
             return
-        allowed = {"/": ("index.html", "text/html; charset=utf-8"),
-                   "/index.html": ("index.html", "text/html; charset=utf-8"),
-                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                   "/styles.css": ("styles.css", "text/css; charset=utf-8")}
-        entry = allowed.get(route)
-        if entry is None:
+        assets = {"/": ("index.html", "text/html; charset=utf-8"),
+                  "/index.html": ("index.html", "text/html; charset=utf-8"),
+                  "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                  "/styles.css": ("styles.css", "text/css; charset=utf-8")}
+        asset = assets.get(route)
+        if asset is None:
             self.send_json({"error": "Not found"}, 404)
             return
-        path = WEB / entry[0]
-        if not path.exists():
-            self.send_json({"error": "Frontend asset missing"}, 500)
-            return
-        self.send_bytes(path.read_bytes(), entry[1])
+        self.send_bytes((WEB / asset[0]).read_bytes(), asset[1])
 
     def do_POST(self) -> None:
-        path = urlsplit(self.path).path
-        if path not in ("/api/reference", "/api/mpc"):
+        route = urlsplit(self.path).path
+        if route not in ("/api/reference", "/api/mpc"):
             self.send_json({"error": "Not found"}, 404)
             return
         try:
             size = int(self.headers.get("Content-Length", "-1"))
             if size < 0 or size > 4096:
-                self.send_json({"error": "Expected a small JSON body"}, 400)
-                return
-            raw = json.loads(self.rfile.read(size))
-            if not isinstance(raw, dict):
+                raise ValueError("Expected a small JSON body")
+            body = json.loads(self.rfile.read(size))
+            if not isinstance(body, dict):
                 raise ValueError("JSON body must be an object")
-            median, poverty, burden = parameters(raw)
-            result = (reference_result(median, poverty, burden) if path == "/api/reference"
-                      else real_mpc_result(median, poverty, burden))
+            values = request_values(body)
+            result = reference_result(values) if route == "/api/reference" else real_mpc_result(values)
             self.send_json(result)
-        except (ValueError, json.JSONDecodeError) as exc:
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc)}, 400)
         except RuntimeError as exc:
             self.send_json({"error": str(exc)}, 409)
@@ -206,10 +227,10 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    print("SOCIAREM-inspired synthetic multiparty demo")
-    print(f"Frontend: http://127.0.0.1:{args.port}")
-    print(f"Real MP-SPDZ locally available: {'YES' if mpc_home() else 'NO (reference only)'}")
-    print("Ctrl+C to stop. Localhost-only; synthetic data; no EDC deployment.")
+    print("P1 synthetic SMPC scoring demonstration")
+    print(f"Open http://127.0.0.1:{args.port}")
+    print(f"MP-SPDZ available: {'YES' if mpc_home() else 'NO (plaintext reference only)'}")
+    print("Localhost only. Do not use personal data. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
