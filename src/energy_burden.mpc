@@ -1,0 +1,13 @@
+# Illustrative fixed-size MP-SPDZ circuit for four pre-aligned households.
+# The Python runner generates an experiment-specific copy with its actual N.
+# Input provider 0: annual energy cost (EUR cents), one integer per household.
+# Input provider 1: annual equivalent income (EUR cents).
+# Both sides learn only the public boolean comparison results.
+N = 4
+THRESHOLD_PERCENT = 10
+
+for i in range(N):
+    energy_cents = sint.get_input_from(0)
+    income_cents = sint.get_input_from(1)
+    hit = 100 * energy_cents > THRESHOLD_PERCENT * income_cents
+    print_ln('RESULT %s', hit.reveal())
