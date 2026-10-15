@@ -2,6 +2,34 @@
 
 Experimental repository for privacy-preserving computation of indicators from vertically partitioned institutional data. Developed as a research proof of concept, not for production use.
 
+## Interactive web demonstration (recommended for meetings)
+
+**Python 3 is the only dependency for the interactive visual reference demo.** There is no npm, frontend build step, database or installation of a web framework.
+
+On **Windows PowerShell** or **Linux/WSL** in this cloned repository:
+
+```sh
+python web/server.py
+```
+
+Then open **http://127.0.0.1:8765** in a browser. On Linux use `python3 web/server.py` if needed.
+
+The dashboard animates the three synthetic institution inputs, lets you select one of seven households, inspect synthetic attributes, change public thresholds, observe the activation of P1, and switch between two *explicitly labelled* backends:
+
+- **Run visual reference** — actual server-side Python calculation over synthetic data. This is plaintext, NOT cryptographically private, and works immediately on Windows with no extra packages.
+- **Run actual 3-party MPC** — calls the **real** MP-SPDZ Semi2k protocol if you have configured the backend from Linux/WSL. No silent fallback to plaintext. Otherwise the button is disabled and explains the missing setup.
+
+To enable local cryptographic runs in **WSL/Linux** after installing/building MP-SPDZ:
+
+```sh
+export MP_SPDZ_HOME=/absolute/path/to/MP-SPDZ
+python3 web/server.py
+```
+
+Build MP-SPDZ's `semi2k-party.x` as described in [the upstream instructions](https://github.com/data61/MP-SPDZ); the [3-party GitHub Actions integration test](https://github.com/rubenl-cloud/smpc-institutional-scoring/actions/workflows/three-party-smpc.yml) has passed. In this prototype, those parties execute as **separate local processes**, not genuinely isolated institutional machines. The shared synthetic test harness has access to every input file; for real deployment each stakeholder must supply its input independently.
+
+Detailed setup, demo walkthrough and troubleshooting: **[Web demo guide](docs/web_demo.md)**. For exact indicator and P1 rules see [P1 technical specification](docs/profile_p1_demo.md).
+
 ## NEW: 3-institution P1 profile activation (demo for 16 October)
 
 This is the main experiment to present. It uses **three independent synthetic stakeholders**, unlike the small 2-party example below:
